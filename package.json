@@ -1,0 +1,68 @@
+{
+  "name": "brain-kit",
+  "version": "0.1.0",
+  "description": "Token-budget aware memory engine + MCP server for AI agents — GBrain alternative with RRF hybrid search",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "brain-mcp": "./dist/bin/brain-mcp.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./mcp": {
+      "import": "./dist/mcp/server.js",
+      "types": "./dist/mcp/server.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "AGENT-SETUP.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch",
+    "start": "node dist/bin/brain-mcp.js",
+    "start:http": "node dist/bin/brain-mcp.js --http",
+    "bench": "npm run build && node dist/bench/runner.js",
+    "prepublishOnly": "npm run typecheck && npm run build"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.2.17",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "js-tiktoken": "^1.0.15",
+    "openai": "^4.104.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "mcp",
+    "memory",
+    "ai",
+    "agents",
+    "vector-search",
+    "hybrid-search",
+    "pglite",
+    "pgvector",
+    "knowledge-graph",
+    "claude",
+    "cursor",
+    "token-budget",
+    "semantic-cache",
+    "intent-classification"
+  ],
+  "license": "MIT"
+}
