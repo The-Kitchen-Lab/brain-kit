@@ -5,11 +5,11 @@
 Zero-dependency alternative to GBrain — runs embedded, costs less, and keeps your LLM context predictable.
 
 ```bash
-npm install brain-kit
+npm install @the-kitchen/brain-kit
 ```
 
 ```typescript
-import { PGliteEngine, OpenAIEmbedding } from 'brain-kit'
+import { PGliteEngine, OpenAIEmbedding } from '@the-kitchen/brain-kit'
 
 const engine = new PGliteEngine(new OpenAIEmbedding(process.env.OPENAI_API_KEY))
 await engine.init()
@@ -65,7 +65,7 @@ brain-kit is a self-contained memory layer. Drop it into any agent — no server
 ## Installation
 
 ```bash
-npm install brain-kit
+npm install @the-kitchen/brain-kit
 ```
 
 Requires:
@@ -77,7 +77,7 @@ Requires:
 ## Quick start
 
 ```typescript
-import { PGliteEngine, OpenAIEmbedding } from 'brain-kit'
+import { PGliteEngine, OpenAIEmbedding } from '@the-kitchen/brain-kit'
 
 const engine = new PGliteEngine(
   new OpenAIEmbedding(process.env.OPENAI_API_KEY),
@@ -118,7 +118,7 @@ await engine.close()
 brain-kit classifies every query into one of four intents without calling an LLM:
 
 ```typescript
-import { classifyIntent } from 'brain-kit'
+import { classifyIntent } from '@the-kitchen/brain-kit'
 
 classifyIntent('who is @garrytan')
 // → { intent: 'entity', confidence: 0.45, signals: ['entity:mention'] }
@@ -161,7 +161,7 @@ const context = results.map(r => r.page.content).join('\n\n')
 Token counting uses `js-tiktoken` with `cl100k_base` (±5% vs Claude/GPT-4). Count manually:
 
 ```typescript
-import { TokenCounter } from 'brain-kit'
+import { TokenCounter } from '@the-kitchen/brain-kit'
 const counter = new TokenCounter()
 console.log(counter.count('Hello world'))  // → 2
 ```
@@ -199,7 +199,7 @@ Entities (`[[wikilinks]]`, `#hashtags`, `@mentions`, URLs) are extracted at writ
 
 ```typescript
 // Extract without storing
-import { extractEntities } from 'brain-kit'
+import { extractEntities } from '@the-kitchen/brain-kit'
 extractEntities('Meeting with [[project-x]] and @alice about #infra')
 // → [
 //     { type: 'wikilink', value: 'project-x', raw: '[[project-x]]' },
@@ -421,7 +421,7 @@ interface SearchOptions {
 ## Programmatic use (embedding your own LLM expander)
 
 ```typescript
-import { PGliteEngine, OpenAIEmbedding, LLMExpander } from 'brain-kit'
+import { PGliteEngine, OpenAIEmbedding, LLMExpander } from '@the-kitchen/brain-kit'
 import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic()
