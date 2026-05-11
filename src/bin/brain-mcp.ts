@@ -6,6 +6,9 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { IncomingMessage, ServerResponse } from 'http'
 import { PGliteEngine } from '../core/storage/pglite.js'
 import { OpenAIEmbedding } from '../core/embedding/openai.js'
+import { OllamaEmbedding } from '../core/embedding/ollama.js'
+import { NullEmbedding } from '../core/embedding/null.js'
+import type { EmbeddingProvider } from '../core/embedding/interface.js'
 import { createBrainMCPServer } from '../mcp/server.js'
 
 const args = process.argv.slice(2)
@@ -16,14 +19,36 @@ const port = portIdx !== -1
   : parseInt(process.env.BRAIN_PORT ?? '3000', 10)
 
 const dbPath = process.env.BRAIN_DB_PATH ?? './brain.pglite'
-const apiKey = process.env.OPENAI_API_KEY
 
-if (!apiKey) {
-  process.stderr.write('Error: OPENAI_API_KEY environment variable is required\n')
-  process.exit(1)
+// Embedding mode detection — first match wins
+let embedding: EmbeddingProvider
+let embeddingMode: string
+
+if (process.env.OPENAI_API_KEY) {
+  embedding = new OpenAIEmbedding(process.env.OPENAI_API_KEY)
+  embeddingMode = 'openai (text-embedding-3-small, 1536 dim)'
+} else if (process.env.OLLAMA_HOST || await isOllamaRunning()) {
+  embedding = new OllamaEmbedding()
+  embeddingMode = 'ollama (nomic-embed-text, 768 dim)'
+} else {
+  embedding = new NullEmbedding()
+  embeddingMode = 'keyword-only (BM25, no semantic search)'
+  process.stderr.write(
+    '⚠  brain-kit: no embedding provider found.\n' +
+    '   Running in keyword-only mode — semantic search and cache are disabled.\n' +
+    '   To enable semantic search, set OPENAI_API_KEY or start Ollama.\n'
+  )
 }
 
-const embedding = new OpenAIEmbedding(apiKey)
+async function isOllamaRunning(): Promise<boolean> {
+  try {
+    const res = await fetch('http://localhost:11434/api/tags', { signal: AbortSignal.timeout(500) })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 const engine = new PGliteEngine(embedding, {
   dbPath,
   cacheEnabled: process.env.BRAIN_CACHE_ENABLED !== 'false',
@@ -92,5 +117,5 @@ if (isHttp) {
   const transport = new StdioServerTransport()
   const mcpServer = createBrainMCPServer(engine)
   await mcpServer.connect(transport)
-  process.stderr.write(`brain-kit MCP server (stdio) started. DB: ${dbPath}\n`)
+  process.stderr.write(`brain-kit MCP server (stdio) started. DB: ${dbPath} | embedding: ${embeddingMode}\n`)
 }

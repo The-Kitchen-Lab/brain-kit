@@ -142,7 +142,8 @@ export class PGliteEngine implements BrainEngine {
 
     this.hybridSearch = new HybridSearch(this.db)
 
-    if (this.cacheEnabled) {
+    // Cache requires real embeddings — disable automatically in keyword-only mode
+    if (this.cacheEnabled && this.embedding.model !== 'none') {
       this.cache = new PGliteSemanticCache(this.db, this.embedding.dimensions)
       await this.cache.init()
     }
@@ -157,20 +158,35 @@ export class PGliteEngine implements BrainEngine {
     const id = input.id ?? randomUUID()
     const embedText = `${input.title}\n${input.content}`
     const embedding = await this.embedding.embed(embedText)
-    const vec = `[${embedding.join(',')}]`
     const metadata = input.metadata ?? {}
 
-    await this.db.query(
-      `INSERT INTO brain_pages (id, title, content, embedding, metadata)
-       VALUES ($1, $2, $3, $4::vector, $5::jsonb)
-       ON CONFLICT (id) DO UPDATE
-         SET title      = EXCLUDED.title,
-             content    = EXCLUDED.content,
-             embedding  = EXCLUDED.embedding,
-             metadata   = EXCLUDED.metadata,
-             updated_at = NOW()`,
-      [id, input.title, input.content, vec, JSON.stringify(metadata)]
-    )
+    if (embedding.length > 0) {
+      const vec = `[${embedding.join(',')}]`
+      await this.db.query(
+        `INSERT INTO brain_pages (id, title, content, embedding, metadata)
+         VALUES ($1, $2, $3, $4::vector, $5::jsonb)
+         ON CONFLICT (id) DO UPDATE
+           SET title      = EXCLUDED.title,
+               content    = EXCLUDED.content,
+               embedding  = EXCLUDED.embedding,
+               metadata   = EXCLUDED.metadata,
+               updated_at = NOW()`,
+        [id, input.title, input.content, vec, JSON.stringify(metadata)]
+      )
+    } else {
+      // keyword-only mode — store NULL embedding
+      await this.db.query(
+        `INSERT INTO brain_pages (id, title, content, embedding, metadata)
+         VALUES ($1, $2, $3, NULL, $4::jsonb)
+         ON CONFLICT (id) DO UPDATE
+           SET title      = EXCLUDED.title,
+               content    = EXCLUDED.content,
+               embedding  = NULL,
+               metadata   = EXCLUDED.metadata,
+               updated_at = NOW()`,
+        [id, input.title, input.content, JSON.stringify(metadata)]
+      )
+    }
 
     if (this.graph) {
       await this.graph.extractAndStore(id, input.title, input.content)
@@ -195,11 +211,12 @@ export class PGliteEngine implements BrainEngine {
     const threshold = opts.cacheThreshold ?? this.cacheSimilarityThreshold
     const useCache = this.cache !== null && !opts.skipCache
 
-    // 1. Embed the original query (always needed — for cache lookup and/or search)
+    // 1. Embed the original query (empty array = keyword-only mode)
     const queryEmbedding = await this.embedding.embed(query)
+    const hasEmbedding = queryEmbedding.length > 0
 
-    // 2. Semantic cache lookup — skip full search if similar query was recently answered
-    if (useCache) {
+    // 2. Semantic cache lookup — requires embeddings
+    if (useCache && hasEmbedding) {
       const cached = await this.cache!.lookup(queryEmbedding, threshold)
       if (cached) {
         return this.budgetEnforcer.enforce(cached.results, budget)
@@ -228,7 +245,7 @@ export class PGliteEngine implements BrainEngine {
     } else {
       const allResults = await Promise.all(
         expansions.map(async (q, i) => {
-          const emb = i === 0 ? queryEmbedding : await this.embedding.embed(q)
+          const emb = i === 0 ? queryEmbedding : (hasEmbedding ? await this.embedding.embed(q) : [])
           return this.hybridSearch.search(emb, q, limit, hybridWeights)
         })
       )
@@ -264,8 +281,8 @@ export class PGliteEngine implements BrainEngine {
     // 11. Stamp detected intent onto results (useful for callers / MCP tools)
     const stamped = budgeted.map(r => ({ ...r, intent: intent.intent }))
 
-    // 12. Cache the budgeted results for future similar queries
-    if (useCache) {
+    // 12. Cache the budgeted results for future similar queries (requires embeddings)
+    if (useCache && hasEmbedding) {
       await this.cache!.store(query, queryEmbedding, stamped)
     }
 

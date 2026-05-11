@@ -70,7 +70,7 @@ npm install brain-kit
 
 Requires:
 - Node.js ≥18
-- `OPENAI_API_KEY` (for embeddings)
+- An embedding provider (optional — see below)
 
 ---
 
@@ -216,14 +216,47 @@ await engine.findPagesByEntity('hashtag', 'infra')
 
 ---
 
+## Embedding modes
+
+brain-kit auto-detects which embedding mode to use at startup — no config required.
+
+| Priority | Mode | Requires | Search quality |
+|----------|------|----------|---------------|
+| 1 | **OpenAI** `text-embedding-3-small` | `OPENAI_API_KEY` | best (~$0.0001/1K tokens) |
+| 2 | **Ollama** `nomic-embed-text` | Ollama running locally | good (free, ~274MB model) |
+| 3 | **Keyword-only** BM25 | nothing | ~65% vs semantic |
+
+Startup log tells you which mode is active:
+
+```
+brain-kit MCP server (stdio) started. DB: ./brain.pglite | embedding: ollama (nomic-embed-text, 768 dim)
+```
+
+### Setting up Ollama
+
+```bash
+brew install ollama
+ollama pull nomic-embed-text   # ~274MB, one-time
+ollama serve                   # runs on http://localhost:11434
+```
+
+Custom host: set `OLLAMA_HOST=http://my-server:11434`.
+
+### Keyword-only mode
+
+No setup needed — just start the MCP server without any env vars. Semantic search and cache are disabled; BM25 full-text search still works. Good enough for exact-term lookups, code snippets, and named entities.
+
+---
+
 ## MCP server (Claude Code / Cursor / Windsurf)
 
 brain-kit ships a built-in MCP server with 22 tools.
 
 ### stdio (recommended for Claude Code)
 
+**With OpenAI:**
 ```json
-// ~/.claude/settings.json  (or Cursor / Windsurf equivalent)
+// ~/.claude/settings.json
 {
   "mcpServers": {
     "brain": {
@@ -238,10 +271,42 @@ brain-kit ships a built-in MCP server with 22 tools.
 }
 ```
 
+**With Ollama (no API key needed):**
+```json
+{
+  "mcpServers": {
+    "brain": {
+      "command": "node",
+      "args": ["/path/to/brain-kit/dist/bin/brain-mcp.js"],
+      "env": {
+        "BRAIN_DB_PATH": "/path/to/your-agent.pglite"
+      }
+    }
+  }
+}
+```
+Ollama is auto-detected if it's running on `localhost:11434`.
+
+**Keyword-only (no setup):**
+```json
+{
+  "mcpServers": {
+    "brain": {
+      "command": "node",
+      "args": ["/path/to/brain-kit/dist/bin/brain-mcp.js"],
+      "env": {
+        "BRAIN_DB_PATH": "/path/to/your-agent.pglite"
+      }
+    }
+  }
+}
+```
+Same config as Ollama — if Ollama isn't running, it falls back to keyword-only automatically.
+
 ### HTTP
 
 ```bash
-OPENAI_API_KEY=sk-... BRAIN_DB_PATH=./brain.pglite \
+BRAIN_DB_PATH=./brain.pglite \
   node dist/bin/brain-mcp.js --http --port 3000
 ```
 
@@ -402,9 +467,10 @@ OPENAI_API_KEY=sk-... npm start
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OPENAI_API_KEY` | — | **Required.** Used for embeddings. |
+| `OPENAI_API_KEY` | — | OpenAI embeddings (priority 1). |
+| `OLLAMA_HOST` | `http://localhost:11434` | Override Ollama endpoint (priority 2). Auto-detected if running. |
 | `BRAIN_DB_PATH` | `./brain.pglite` | PGLite directory path. |
-| `BRAIN_CACHE_ENABLED` | `true` | Enable semantic query cache. |
+| `BRAIN_CACHE_ENABLED` | `true` | Enable semantic query cache (auto-disabled in keyword-only mode). |
 | `BRAIN_GRAPH_ENABLED` | `true` | Enable knowledge graph. |
 | `BRAIN_PORT` | `3000` | HTTP mode port. |
 
